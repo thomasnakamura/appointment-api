@@ -1,0 +1,109 @@
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider      = "prisma-client-js"
+  output        = "./src/generated/prisma"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x"]
+}
+
+enum Role {
+  client
+  specialist
+  scheduler
+  admin
+}
+
+enum Status {
+  pending
+  confirmed
+  cancelled
+  completed
+  rescheduled
+  expired
+}
+
+enum ActionType {
+  create
+  reschedule
+  cancel
+  validation_error
+}
+
+model User {
+  id        String   @id @default(uuid())
+  name      String
+  email     String   @unique
+  password  String
+  role      Role
+  priority  Boolean  @default(false)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  specialist            Specialist?
+  client                Client?
+  auditLogs             AuditLog[]
+  scheduledAppointments Appointment[] @relation("ScheduledBy")
+}
+
+model Specialist {
+  id                 String   @id @default(uuid())
+  userId             String   @unique
+  specialty          String
+  dailyLimit         Int
+  minIntervalMinutes Int
+  availability       Json
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  user         User          @relation(fields: [userId], references: [id])
+  appointments Appointment[]
+}
+
+model Client {
+  id        String   @id @default(uuid())
+  userId    String   @unique
+  phone     String
+  cpf       String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user         User          @relation(fields: [userId], references: [id])
+  appointments Appointment[]
+}
+
+model Appointment {
+  id                String   @id @default(uuid())
+  clientId          String
+  specialistId      String
+  scheduledById     String
+  date              DateTime
+  time              String
+  status            Status
+  rescheduledFromId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  client      Client     @relation(fields: [clientId], references: [id])
+  specialist  Specialist @relation(fields: [specialistId], references: [id])
+  scheduledBy User       @relation("ScheduledBy", fields: [scheduledById], references: [id])
+
+  rescheduledFrom         Appointment?  @relation("RescheduledFrom", fields: [rescheduledFromId], references: [id])
+  rescheduledAppointments Appointment[] @relation("RescheduledFrom")
+}
+
+model AuditLog {
+  id         String     @id @default(uuid())
+  userId     String
+  actionType ActionType
+  entity     String
+  entityId   String
+  message    String
+  createdAt  DateTime   @default(now())
+
+  user User @relation(fields: [userId], references: [id])
+}
